@@ -1,5 +1,6 @@
 package com.github.linyuzai.plugin.autoconfigure.management;
 
+import com.github.linyuzai.plugin.autoconfigure.preperties.PluginConceptProperties;
 import com.github.linyuzai.plugin.core.autoload.*;
 import com.github.linyuzai.plugin.core.autoload.location.LocalPluginLocation;
 import com.github.linyuzai.plugin.core.autoload.location.PluginLocation;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.File;
@@ -43,6 +45,9 @@ public class PluginManagementController {
     protected final Set<String> updatingSet = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     @Autowired
+    protected PluginConceptProperties properties;
+
+    @Autowired
     protected PluginConcept concept;
 
     @Autowired
@@ -54,9 +59,23 @@ public class PluginManagementController {
     @Autowired
     protected PluginExecutor executor;
 
+    @Autowired
+    protected PluginManagementAuthorizer authorizer;
+
     protected final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    @GetMapping("/group/add")
+    @GetMapping("/setting")
+    public Response setting() {
+        return manage(() -> new Setting(properties.getManagement().getHeader(),
+                properties.getManagement().getFooter()), () -> "获取配置");
+    }
+
+    @PostMapping("/auth/unlock")
+    public Response unlock(@RequestParam("password") String password) {
+        return manage(() -> authorizer.unlock(password), () -> null);
+    }
+
+    @PostMapping("/group/add")
     public Response addGroup(@RequestParam("group") String group) {
         return manage(() -> {
             loader.addGroup(group);
@@ -74,7 +93,7 @@ public class PluginManagementController {
         }, () -> "插件分组获取");
     }
 
-    @GetMapping("/plugin/load")
+    @PostMapping("/plugin/load")
     public Response loadPlugin(@RequestParam("group") String group,
                                @RequestParam("name") String name) {
         return manage(() -> {
@@ -97,7 +116,7 @@ public class PluginManagementController {
         }, () -> "插件加载");
     }
 
-    @GetMapping("/plugin/unload")
+    @PostMapping("/plugin/unload")
     public Response unloadPlugin(@RequestParam("group") String group,
                                  @RequestParam("name") String name) {
         return manage(() -> {
@@ -120,7 +139,7 @@ public class PluginManagementController {
         }, () -> "插件卸载");
     }
 
-    @GetMapping("/plugin/reload")
+    @PostMapping("/plugin/reload")
     public Response reloadPlugin(@RequestParam("group") String group,
                                  @RequestParam("name") String name) {
         return manage(() -> {
@@ -151,7 +170,7 @@ public class PluginManagementController {
         return manage(() -> location.exist(group, name), () -> "插件包重名判断");
     }
 
-    @GetMapping("/plugin/rename")
+    @PostMapping("/plugin/rename")
     public Response renamePlugin(@RequestParam("group") String group,
                                  @RequestParam("name") String name,
                                  @RequestParam("rename") String rename) {
@@ -161,7 +180,7 @@ public class PluginManagementController {
         }, () -> "插件包重命名");
     }
 
-    @GetMapping("/plugin/delete")
+    @PostMapping("/plugin/delete")
     public Response deletePlugin(@RequestParam("group") String group,
                                  @RequestParam("name") String name) {
         return manage(() -> {
@@ -245,15 +264,16 @@ public class PluginManagementController {
     }
 
     public Response manage(Supplier<Object> success, Supplier<String> message) {
+        String msg = message.get();
         try {
             Object object = success.get();
             if (object instanceof Response) {
                 return (Response) object;
             }
-            return success(message.get() + "成功", object);
+            return success(msg == null ? null : msg + "成功", object);
         } catch (Throwable e) {
             log.error(message.get(), e);
-            return failure(message.get() + "失败", e);
+            return failure(msg == null ? null : msg + "失败", e);
         }
     }
 
@@ -378,6 +398,15 @@ public class PluginManagementController {
                 }
             }
         }
+    }
+
+    @Getter
+    @RequiredArgsConstructor
+    public static class Setting {
+
+        private final PluginConceptProperties.ManagementProperties.HeaderProperties header;
+
+        private final PluginConceptProperties.ManagementProperties.FooterProperties footer;
     }
 
     @Getter
